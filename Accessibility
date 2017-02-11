@@ -1,0 +1,180 @@
+# 使应用更易使用
+
+## 标签元素
+
+向用户提供解释每个可互动元素的意义和目的有用且形象的标签是非常重要的。这些标签允许屏幕阅读者（比如   TalkBack ）正确向用户解释每个控制器的功能。
+
+你可以使用一下两个方法提供元素的标签：
+
+* 当展示在 Activity 的整个生命周期中都不会改变样式的静态元素时，在 layout 资源文件中添加一个 xml 元素。
+* 当展示在 Activity 生命周期中会改变样式的动态元素时，在改变元素样式的动态逻辑中设置元素标签。
+
+适用于元素标签的实际属性和方法取决于元素的类型：
+
+* 图形元素，比如 ImageView , ImageButton ，使用 android:contentDescription XML 属性设置静态元素 或 setContentDescription() 方法设置动态元素。
+
+  对于简单装饰的图形元素，设置各自的 android:contentDescription XML 属性为 “@null”。如果你的应用只支持 Android 4.1 及以上的设备，你可以设置 Android:isImportantForAccessibility XML 元素为 “no”。
+
+* 可编辑元素，比如 EditText , 使用hint XML属性设置静态元素或 setHint() 方法设置动态属性。
+
+* 如果你的应用在 Android 4.2 及以上的设备上安装，对于充当正文标签的 View 对象，使用 android:labelFor 属性。
+
+> Accessibility 服务自动捕获 TextView 中的文字，所以你通常不需要标记这些元素 
+
+以下示例中，提供分享功能的静态 ImageButton 对象使用一个  “share” 标签：
+
+```java
+<ImageButton
+   android:layout_width="wrap_content"
+   android:layout_height="wrap_content"
+   android:layout_alignParentBottom="true"
+   android:layout_alignParentLeft="true"
+   android:layout_alignParentStart="true"
+   android:contentDescription="@string/share"
+   android:src="@drawable/ic_share" />
+```
+
+> 许多 Accessibility 服务，比如 TalkBack , BrailleBack ,在声明标签后自动声明元素类型，所以你不应改在标签中包括元素类型。
+
+以下例子展示了如何在 Activity 中更新一个显示播放或暂停按钮的动态的 ImageView 对象：
+
+```  
+ImageView playPauseImageView = new ImageView();
+boolean mediaCurrentlyPlaying = true;
+...
+private void updateImageButton() {
+    if (mediaCurrentlyPlaying) {
+       playPauseImageView.setImageResource(R.drawable.ic_pause);
+
+       // In res/values/strings.xml, "pause" contains a value of "Pause".
+       playPauseImageView.setContentDescription(getString(R.string.pause));
+    } else {
+       playPauseImageView.setImageResource(R.drawable.ic_play);
+
+       // In res/values/strings.xml, "play" contains a value of "Play".
+       playPauseImageView.setContentDescription(getString(R.string.play));
+    }
+}
+```
+### 翻译到这里发现并没有什么用==以下翻译内容才是我想要的
+
+## 建立一个 Accessibility Service
+
+### Manifest 声明和权限
+
+提供 Accessibility Services 的应用必须在应用的 mainfest 文件中包括制定的声明告诉系统这是个 Accessibility Services 。
+
+#### Accessibility Service 声明
+
+ 为了适配 Android 4.1 及以上设备， mainfest 文件必须通过添加 BIND_ACCESSIBILITY_SERVICE 权限包含一个 Accessibility Services 的意图过滤器保证只有系统可以绑定。
+
+```xml
+ <application>
+    <service android:name=".MyAccessibilityService"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        android:label="@string/accessibility_service_label">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+      </intent-filter>
+    </service>
+  </application>
+```
+
+这些声明在 Android 1.6 及以上都需要。
+
+
+
+#### Accessibility Service 配置 
+
+Accessibility Services 必须提供指定服务处理处理事件的类型和服务额外信息的配置。这个配置被包含在 AccessibilityServiceInfo 类中。你的服务可以在运行时通过生成实例类并使用 setServiceInfo() 配置信息。但是不是所有的配置选项都可以通过这个方法配置。
+
+ Android 4.0 开始，你可以个通过 <meta-data> 元素引用一个可以设置服务全部选项的配置文件：
+
+``` 
+<service android:name=".MyAccessibilityService">
+  ...
+  <meta-data
+    android:name="android.accessibilityservice"
+    android:resource="@xml/accessibility_service_config" />
+</service>
+```
+
+
+
+xml :
+
+```xml
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_service_description"
+    android:packageNames="com.example.android.apis"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFlags="flagDefault"
+    android:accessibilityFeedbackType="feedbackSpoken"
+    android:notificationTimeout="100"
+    android:canRetrieveWindowContent="true"
+    android:settingsActivity="com.example.android.accessibility.ServiceSettingsActivity"
+/>
+```
+
+### 注册 Accessibility 事件
+
+服务配置参数一个最重要的功能就是制定你的服务可以处理何种事件。制定服务信息可以是服务相互合作，并允许开发者灵活的制定应用和事件类型：
+
+* 包名： 指定服务想要处理的应用包名。如果这个参数被省略，你的服务将被认为处理所有应用的事件。这个参数可以通过配置文件的 android:packageNames 设置以逗号分隔的列表，或者使用 AccessibilityServiceInfo.packagenames 设置。
+* 事件类型：指定服务处理事件的类型。这个参数可以通过配置文件中的 android:accessibilityEventTypes 设置以 | 为分隔的list ，或者使用 AccessibilityServiceInfo.eventTypes 设置。
+
+### Accessibility Services 方法
+
+* onServiceConnected() - （可选） 当系统连接服务成功时回调。使用这个方法完成服务的一次性操作，包括连接用户反馈系统服务，比如音频管理器或者震动器。如果你想在运行时修改服务配置或者进行调整，在这个地方使用 serServiceInfo() 方法。
+* onAccessibilityEvent() -（必选）当服务检测到一个 Accessibility 事件满足了之前你设置的服务类型，系统将会回调此方法。比如，当用户点击一个按钮或者聚焦在 UI 界面时。当这发生时，系统调用这个方法，通过 AccessibilityEvent() 向用户提供反馈。这个方法在整个生命周期中可以被多次调用。
+* onInterrupt() -（必选） 当系统想要中断服务提供的反馈，通常时作为用户的操作的回应比如移动焦点时调用这个方法。这个方法将在生命周期期间多次调用。
+* onUnbind() - （可选） 系统将要关闭服务时调用方法。使用这个方法做一些关闭程序，包括释放用户反馈系统服务，比如音频管理器或者振动器。
+
+### 获取事件细节
+
+* AccessibilityEvent.getRecordCount() and getRecord(int) - 这些方法允许你取回 AccessibilityRecord 对象的 set 列表。
+* AccessibilityEvent.getSource() - 这个方法返回一个 AccessibilityNodeInfo 对象。这个对象可以获得 View 的布局层次（父布局和子布局）。因此，服务必须通过在配置 XML 文件中添加 canRetrieveWindowContent 属性为 true 来获取权限。否则调用失败。
+
+### 为用户采取操作
+
+#### 监听手势
+
+在Android 4.1 以后可以监听指定手势。这个特性需要设置 AccessibilityServiceInfo 的flags 为 FLAG_REQUEST_TOUCH_EXPLORATION_MODE:
+
+```
+public class MyAccessibilityService extends AccessibilityService {
+    @Override
+    public void onCreate() {
+        getServiceInfo().flags = AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE;
+    }
+    ...
+}
+```
+
+#### 使用可访问行动
+
+``` java
+public class MyAccessibilityService extends AccessibilityService {
+
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        // get the source node of the event
+        AccessibilityNodeInfo nodeInfo = event.getSource();
+
+        // Use the event and node information to determine
+        // what action to take
+
+        // take action on behalf of the user
+        nodeInfo.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+
+        // recycle the nodeInfo object
+        nodeInfo.recycle();
+    }
+    ...
+}
+```
+
+performAction() 方法允许你在应用中采取行动。如果需要采取一个全局行动，比如返回值 Home 屏，按下返回按钮，打开通知屏或最近应用列表，使用 performGlobalAction() 方法。
+
+#### 使用焦点类型
+
